@@ -42,14 +42,15 @@ func Init() *sdktrace.TracerProvider {
 
 func GetEnv(name string, defalutValue string) string {
 	var value string
-	if value = os.Getenv(name); value != "" {
+
+	if value = os.Getenv(name); value == "" {
 		value = defalutValue
 	}
 	return value
 }
 
 func GetPostgresConnection() (conn *sqlx.DB, err error) {
-	dbinfo := fmt.Sprintf("host=%v port=%v user=%v password=%v dbname=%v",
+	dbinfo := fmt.Sprintf("host=%v port=%v user=%v password=%v dbname=%v sslmode=disable",
 		GetEnv("POSTGRES_HOST", "127.0.0.1"),
 		GetEnv("POSTGRES_PORT", "5432"),
 		GetEnv("POSTGRES_USER", "postgres"),

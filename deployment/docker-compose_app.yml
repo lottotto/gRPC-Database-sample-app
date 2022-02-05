@@ -1,32 +1,32 @@
 version: '3.7'
 services:
-  grpc-server:
-    # image: mygrpc-server:0.0.1
-    build:
-      context: ../
-      dockerfile: ./build/server/Dockerfile
-    ports:
-      - 50051:50051
-      - 9092:9092
-    environment:
-      JAEGER_AGENT_ENDPOINT: http://host.docker.internal:14268/api/traces
-  grpc-client:
-    build:
-      context: ../
-      dockerfile: ./build/client/Dockerfile
-    ports:
-      - 8080:8080
-    environment:
-      GRPC_HOST: grpc-server
-      GRPC_PORT: 50051
-      JAEGER_AGENT_ENDPOINT: http://host.docker.internal:14268/api/traces
-    depends_on:
-      - grpc-server
-  # postgres:
-  #   image: postgres:14.1
+  # grpc-std-server:
+  #   # image: mygrpc-server:0.0.1
+  #   build:
+  #     context: ../
+  #     dockerfile: ./build/server/Dockerfile
   #   ports:
-  #     - 5432:5432
+  #     - 50051:50051
+  #     - 9092:9092
   #   environment:
-  #     POSTGRES_PASSWORD: password
-  #   volumes:
-  #     - "./db:/docker-entrypoint-initdb.d"
+  #     JAEGER_AGENT_ENDPOINT: http://host.docker.internal:14268/api/traces
+  # grpc-std-client:
+  #   build:
+  #     context: ../
+  #     dockerfile: ./build/client/Dockerfile
+  #   ports:
+  #     - 8080:8080
+  #   environment:
+  #     GRPC_HOST: grpc-server
+  #     GRPC_PORT: 50051
+  #     JAEGER_AGENT_ENDPOINT: http://host.docker.internal:14268/api/traces
+  #   depends_on:
+  #     - grpc-std-server
+  postgres:
+    image: postgres:14.1
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: password
+    volumes:
+      - "./db:/docker-entrypoint-initdb.d"
