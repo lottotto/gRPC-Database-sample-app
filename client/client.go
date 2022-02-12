@@ -58,7 +58,6 @@ func (c *Controller) userHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	// トレースの追加
-	// tp, err := utils.InitTraceProviderJaeger("gRPC", "1.0.0")
 	tp, err := utils.InitTraceProviderStdOut("gRPC", "1.0.0")
 	otel.SetTracerProvider(tp)
 	// 後続のサービスにつなげるためにpropagaterを追加
@@ -88,7 +87,11 @@ func main() {
 		otelhttp.WithPropagators(otel.GetTextMapPropagator()),
 	}
 	// Todo: 3点リーダつけると何が起きるのか調べる
-	otelUserHandler := otelhttp.NewHandler(http.HandlerFunc(c.userHandler), "UserHandler", otelOptions...)
+	otelUserHandler := otelhttp.NewHandler(
+		http.HandlerFunc(c.userHandler),
+		"UserHandler",
+		otelOptions...,
+	)
 
 	// http.HandleFunc("/", c.userHandler)
 	http.HandleFunc("/", otelUserHandler.ServeHTTP)

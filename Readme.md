@@ -1,8 +1,12 @@
 
+# gRPC-Database-sample-app
 
+this is example application for opentelemetry instrumentation.
+
+
+# Usage
 
 ```
-protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    api/proto/example.proto
+cd deployment
+docker-compose -f docker-compose-app.yaml up
 ```
