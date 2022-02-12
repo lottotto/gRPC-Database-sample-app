@@ -10,6 +10,9 @@ services:
   #     - 9092:9092
   #   environment:
   #     JAEGER_AGENT_ENDPOINT: http://host.docker.internal:14268/api/traces
+  #     POSTGRES_HOST: postgres
+  #   depends_on:
+  #     - postgres
   # grpc-std-client:
   #   build:
   #     context: ../

@@ -11,10 +11,16 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 
 	pb "github.com/lottotto/stdgrpc/api/proto"
 	"github.com/lottotto/stdgrpc/utils"
 	"google.golang.org/grpc"
+
+	"github.com/XSAM/otelsql"
 )
 
 type User struct {
@@ -29,6 +35,7 @@ type server struct {
 }
 
 func (s *server) ExampleGet(ctx context.Context, in *pb.ExampleRequest) (*pb.ExampleResponse, error) {
+
 	log.Printf("ExampleGet Recieved: %v", in.GetName())
 
 	query := `SELECT * FROM example where NAME=$1`
@@ -54,6 +61,7 @@ func (s *server) ExampleGet(ctx context.Context, in *pb.ExampleRequest) (*pb.Exa
 }
 
 func (s *server) ExamplePost(ctx context.Context, in *pb.ExampleRequest) (*pb.ExampleResponse, error) {
+
 	log.Printf("ExamplePost Recieved: %v", in.GetName())
 	// Todo: MustExecとExecの違いを調べる
 	query := `INSERT INTO example (NAME, NUMBER) VALUES ($1, $2)`
@@ -67,7 +75,20 @@ func (s *server) ExamplePost(ctx context.Context, in *pb.ExampleRequest) (*pb.Ex
 }
 
 func main() {
-	conn, err := utils.GetPostgresConnection()
+	// tracerの設定
+	tp, err := utils.InitTraceProviderStdOut("gRPC", "1.0.0")
+	if err != nil {
+		log.Fatalf("something error: %v", err)
+	}
+	otel.SetTracerProvider(tp)
+	// 受け取る側にも必要→超ハマった
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
+	driverName, err := otelsql.Register("postgres", semconv.DBSystemPostgreSQL.Value.AsString())
+	if err != nil {
+		log.Fatalf("something error: %v", err)
+	}
+	conn, err := sqlx.Open(driverName, utils.GetPostgresConnectionInfo())
 	if err != nil {
 		log.Fatalf("could not connect db: %v", err)
 	}
@@ -78,7 +99,9 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	defer lis.Close()
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
+	)
 
 	pb.RegisterExampleServiceServer(s, &server{conn: conn})
 	log.Printf("server listening at %v", lis.Addr())
