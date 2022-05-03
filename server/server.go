@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	_ "net/http/pprof"
 
@@ -17,16 +16,15 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 
 	pb "github.com/lottotto/stdgrpc/api/proto"
+	"github.com/lottotto/stdgrpc/server/dao"
 	"github.com/lottotto/stdgrpc/utils"
+	"github.com/lottotto/stdgrpc/utils/logger"
 	"google.golang.org/grpc"
 
 	"github.com/XSAM/otelsql"
 )
 
-type User struct {
-	Name   string `json:"name" db:"name"`
-	Number int    `json:"number" db:"number"`
-}
+// var zaplogger zap.Logger
 
 type server struct {
 	pb.UnimplementedExampleServiceServer
@@ -38,19 +36,10 @@ func (s *server) ExampleGet(ctx context.Context, in *pb.ExampleRequest) (*pb.Exa
 
 	log.Printf("ExampleGet Recieved: %v", in.GetName())
 
-	query := `SELECT * FROM example where NAME=$1`
-	// Todo: QueryxContextとQueryContextの違いを調べる
-	rows, err := s.conn.QueryxContext(ctx, query, in.GetName())
+	dao := &dao.UserDao{Conn: s.conn}
+	users, err := dao.FindByName(ctx, in.GetName())
 	if err != nil {
 		log.Fatalf("could not get rows: \n%v", err)
-	}
-	var users []User
-	rows.Scan(&users)
-	for rows.Next() {
-		var u User
-		// Todo: Scanの方法について調べておく
-		err = rows.StructScan(&u)
-		users = append(users, u)
 	}
 	b, err := json.Marshal(users)
 	if err != nil {
@@ -62,27 +51,41 @@ func (s *server) ExampleGet(ctx context.Context, in *pb.ExampleRequest) (*pb.Exa
 
 func (s *server) ExamplePost(ctx context.Context, in *pb.ExampleRequest) (*pb.ExampleResponse, error) {
 
-	log.Printf("ExamplePost Recieved: %v", in.GetName())
-	// Todo: MustExecとExecの違いを調べる
-	query := `INSERT INTO example (NAME, NUMBER) VALUES ($1, $2)`
-	_, err := s.conn.ExecContext(ctx, query, in.GetName(), rand.Intn(100))
+	zaplogger, _ := logger.GetZapLogger()
+	zaplogger.Info("Example Post Recieved",
+		logger.GetOtelLogMetadataFields(ctx)...,
+	)
+
+	dao := &dao.UserDao{Conn: s.conn}
+	err := dao.Update(ctx, in.GetName())
 	if err != nil {
 		log.Fatalf("could not insert: %v", err)
 		return &pb.ExampleResponse{Message: "grpc_ng"}, nil
 	}
-
 	return &pb.ExampleResponse{Message: "grpc_ok"}, nil
 }
 
 func main() {
-	// tracerの設定
-	tp, err := utils.InitTraceProviderStdOut("gRPC", "1.0.0")
+	zaplogger, err := logger.GetZapLogger()
 	if err != nil {
-		log.Fatalf("something error: %v", err)
+		panic(err)
 	}
+	// Exporter の設定
+	exporter, err := utils.GetTraceExporterStdOut()
+	if err != nil {
+		log.Fatalf("Could not create Exporter: %v \n", err)
+	}
+	// tracerProviderの設定
+	tp, err := utils.InitTraceProvider(exporter, "gRPC", "1.0.0")
+
 	otel.SetTracerProvider(tp)
 	// 受け取る側にも必要→超ハマった
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
 
 	driverName, err := otelsql.Register("postgres", semconv.DBSystemPostgreSQL.Value.AsString())
 	if err != nil {
@@ -104,8 +107,13 @@ func main() {
 	)
 
 	pb.RegisterExampleServiceServer(s, &server{conn: conn})
-	log.Printf("server listening at %v", lis.Addr())
-
+	// log.Printf("server listening at %v", lis.Addr())
+	// zaplogger.Info("Hello zap")
+	// zaplogger.WithOptions(logger.GetOtelLogMetadataFields(context.Background()))
+	zaplogger.Info(
+		fmt.Sprintf("server listening at %v", lis.Addr()),
+		logger.GetOtelLogMetadataFields(context.Background())...,
+	)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

@@ -23,10 +23,9 @@ type Controller struct {
 	conn *grpc.ClientConn
 }
 
-// Todo: メソッドにするときに親の構造体にアドレスをつける理由を調べる
+// Controllerインスタンスが持っているconnectionオブジェクトを参照利用するために、参照渡しとしている。
 func (c *Controller) userHandler(w http.ResponseWriter, r *http.Request) {
 	client := pb.NewExampleServiceClient(c.conn)
-	fmt.Printf("method: %v", r.Method)
 	switch {
 	case r.Method == http.MethodGet:
 		queryParam := r.URL.Query().Get("name")
@@ -48,6 +47,9 @@ func (c *Controller) userHandler(w http.ResponseWriter, r *http.Request) {
 			log.Fatalf("cannot unmarshal body: %v", err)
 		}
 		resp, err := client.ExamplePost(r.Context(), &pb.ExampleRequest{Name: req.GetName()})
+		if err != nil {
+			log.Fatalf("could not send grpc server: %v\n", err)
+		}
 		w.Write([]byte(resp.GetMessage()))
 		return
 	default:
@@ -57,8 +59,15 @@ func (c *Controller) userHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+
+	// Exporter の作成
+	exporter, err := utils.GetTraceExporterStdOut()
+	if err != nil {
+		log.Fatalf("Could not create Exporter: %v \n", err)
+	}
+
+	tp, err := utils.InitTraceProvider(exporter, "gRPC", "1.0.0")
 	// トレースの追加
-	tp, err := utils.InitTraceProviderStdOut("gRPC", "1.0.0")
 	otel.SetTracerProvider(tp)
 	// 後続のサービスにつなげるためにpropagaterを追加
 	otel.SetTextMapPropagator(
