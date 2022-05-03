@@ -1,0 +1,30 @@
+version: '3.7'
+services:
+  grpc-std-server:
+    image: server:0.0.1
+    ports:
+      - 50051:50051
+      - 9092:9092
+    environment:
+      # JAEGER_AGENT_ENDPOINT: http://host.docker.internal:14268/api/traces
+      POSTGRES_HOST: postgres
+    depends_on:
+      - postgres
+  grpc-std-client:
+    image: client:0.0.1
+    ports:
+      - 8080:8080
+    environment:
+      GRPC_HOST: grpc-std-server
+      GRPC_PORT: 50051
+    # JAEGER_AGENT_ENDPOINT: http://host.docker.internal:14268/api/traces
+    depends_on:
+      - grpc-std-server
+  postgres:
+    image: postgres:14.1
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: password
+    volumes:
+      - "./db:/docker-entrypoint-initdb.d"
